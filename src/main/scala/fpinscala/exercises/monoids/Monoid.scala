@@ -35,9 +35,11 @@ object Monoid:
     def combine(x: Boolean, y: Boolean) = x && y
     val empty = true
 
-  def optionMonoid[A]: Monoid[Option[A]] = new:
+  def firstOptionMonoid[A]: Monoid[Option[A]] = new:
     def combine(x: Option[A], y: Option[A]) =  x `orElse` y
     val empty = None
+
+  def lastOptionMonoid[A]: Monoid[Option[A]] = dual(firstOptionMonoid)
 
   def dual[A](m: Monoid[A]): Monoid[A] = new:
     def combine(x: A, y: A): A = m.combine(y, x)
@@ -45,7 +47,7 @@ object Monoid:
 
   def endoMonoid[A]: Monoid[A => A] = new:
     def combine(f: A => A, g: A => A): A => A = f andThen g
-    val empty = identity
+    val empty = a => a // identity function
 
 
 
@@ -71,26 +73,33 @@ object Monoid:
     as.foldLeft(m.empty)(m.combine)
 
   def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
-    // A first attempt might be:
-    // (as map f).fold(m.empty)(m.combine)
-    // but this traverses the list twice.
     as.foldLeft(m.empty)((b, a) => m.combine(b, f(a)))
 
 
   def foldRight[A, B](as: List[A])(acc: B)(f: (A, B) => B): B =
-    ???
+    foldMap(as, dual(endoMonoid))(f.curried)(acc)
 
   def foldLeft[A, B](as: List[A])(acc: B)(f: (B, A) => B): B =
-    ???
+    foldMap(as, endoMonoid)((a: A) => (b: B) => f(b, a))(acc)
 
   def foldMapV[A, B](as: IndexedSeq[A], m: Monoid[B])(f: A => B): B =
-    ???
+    if (as.length <= 1) then
+      as.headOption.map(f).getOrElse(m.empty)
+    else
+      val (l,r) = as.splitAt(as.size / 2)
+      m.combine(foldMapV(l,m)(f), foldMapV(r,m)(f))
 
-  def par[A](m: Monoid[A]): Monoid[Par[A]] =
-    ???
+    
 
-  def parFoldMap[A, B](v: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B] =
-    ???
+  def par[A](m: Monoid[A]): Monoid[Par[A]] = new:
+    def combine(a1: Par[A], a2: Par[A]) = a1.map2(a2)(m.combine)
+    val empty = Par.unit(m.empty)
+    
+    
+  def parFoldMap[A, B](as: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B] =
+    Par.parMap(as)(f).flatMap: bs =>
+      foldMapV(bs, par(m))(b => Par.lazyUnit(b))
+    
 
   def ordered(ints: IndexedSeq[Int]): Boolean =
     ???
@@ -99,9 +108,29 @@ object Monoid:
     case Stub(chars: String)
     case Part(lStub: String, words: Int, rStub: String)
 
-  lazy val wcMonoid: Monoid[WC] = ???
+  lazy val wcMonoid: Monoid[WC] = new:
+    val empty = WC.Stub("")
+    def combine(wc1: WC, wc2: WC) = (wc1, wc2) match
+      case (WC.Stub(a), WC.Stub(b)) => WC.Stub(a + b)
+      case (WC.Stub(a), WC.Part(l, w, r)) => WC.Part(a + l, w, r)
+      case (WC.Part(l, w, r), WC.Stub(a)) => WC.Part(l, w, r + a)
+      case (WC.Part(l1, w1, r1), WC.Part(l2, w2, r2)) =>
+        WC.Part(l1, w1 + (if (r1 + l2).isEmpty then 0 else 1) + w2, r2)
 
-  def count(s: String): Int = ???
+      def count(s: String): Int =
+        def wc(c: Char): WC =
+          if c.isWhitespace then
+            WC.Part("", 0, "")
+          else
+            WC.Stub(c.toString)
+
+        def unstub(s: String) = if s.isEmpty then 0 else 1
+
+        foldMapV(s.toIndexedSeq, wcMonoid)(wc) match
+          case WC.Stub(s) => unstub(s)
+          case WC.Part(l, w, r) => unstub(l) + w + unstub(r)
+      end count
+
 
   given productMonoid[A, B](using ma: Monoid[A], mb: Monoid[B]): Monoid[(A, B)]
   with
