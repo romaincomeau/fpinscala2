@@ -8,7 +8,6 @@ object Test:
   import fpinscala.exercises.parallelism.Nonblocking
   import fpinscala.exercises.parallelism.Nonblocking.*
 
-
 object Par:
   opaque type Par[A] = ExecutorService => Future[A]
 

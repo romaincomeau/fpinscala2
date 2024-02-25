@@ -5,32 +5,39 @@ import fpinscala.answers.monoids.Monoid
 import fpinscala.answers.state.State
 
 trait Applicative[F[_]] extends Functor[F]:
+  // def sequence[A](fas: List[F[A]]): F[List[A]]
+  // def traverse[A,B](as: List[A])(f: A => F[B]): F[List[B]]
+  // def replicateM[A](n: Int, fa: F[A]): F[List[A]]
+  // extension [A](fa: F[A]) def product[B](fb: F[B]): F[(A, B)]
   self =>
 
   def unit[A](a: => A): F[A]
 
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
-    ???
+    fa.map2(fab)((a, f) => f(a))
+    // the book wrote:
+    // fab.map2(fa)(_(_))
 
   extension [A](fa: F[A])
     def map2[B, C](fb: F[B])(f: (A, B) => C): F[C] =
-      ???
+      apply(unit(f.curried))(???)
+      
 
     def map[B](f: A => B): F[B] =
       apply(unit(f))(fa)
 
-  def sequence[A](fas: List[F[A]]): F[List[A]] =
-    ???
-
   def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] =
-    ???
+    as.foldRight(unit(List[B]()))((h, t) => f(h).map2(t)(_ :: _))
+
+  def sequence[A](fas: List[F[A]]): F[List[A]] =
+    traverse(fas)(identity)
 
   def replicateM[A](n: Int, fa: F[A]): F[List[A]] =
-    ???
+    sequence(List.fill(n)(fa))
 
   extension [A](fa: F[A])
     def product[B](fb: F[B]): F[(A, B)] =
-      ???
+      fa.map2(fb)((_, _))
 
     def map3[B, C, D](
         fb: F[B],

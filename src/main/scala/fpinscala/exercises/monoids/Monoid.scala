@@ -1,9 +1,10 @@
 package fpinscala.exercises.monoids
 
-import fpinscala.exercises.testing.{Prop, Gen}
-import fpinscala.exercises.testing.Prop.*
-import fpinscala.exercises.testing.Gen.`**`
 import fpinscala.exercises.parallelism.Nonblocking.*
+import fpinscala.exercises.testing.Gen
+import fpinscala.exercises.testing.Gen.`**`
+import fpinscala.exercises.testing.Prop
+import fpinscala.exercises.testing.Prop.*
 
 trait Monoid[A]:
   def combine(a1: A, a2: A): A
@@ -11,7 +12,7 @@ trait Monoid[A]:
 
 object Monoid:
 
-  val stringMonoid: Monoid[String] = new:
+  given string: Monoid[String] with
     def combine(a1: String, a2: String) = a1 + a2
     val empty                           = ""
 
@@ -19,25 +20,25 @@ object Monoid:
     def combine(a1: List[A], a2: List[A]) = a1 ++ a2
     val empty                             = Nil
 
-  lazy val intAddition: Monoid[Int] = new:
+  given intAddition: Monoid[Int] with
     def combine(x: Int, y: Int) = x + y
-    val empty = 0
+    val empty                   = 0
 
   lazy val intMultiplication: Monoid[Int] = new:
     def combine(x: Int, y: Int) = x * y
-    val empty = 1
+    val empty                   = 1
 
   lazy val booleanOr: Monoid[Boolean] = new:
     def combine(x: Boolean, y: Boolean) = x || y
-    val empty = false
+    val empty                           = false
 
   lazy val booleanAnd: Monoid[Boolean] = new:
     def combine(x: Boolean, y: Boolean) = x && y
-    val empty = true
+    val empty                           = true
 
   def firstOptionMonoid[A]: Monoid[Option[A]] = new:
-    def combine(x: Option[A], y: Option[A]) =  x `orElse` y
-    val empty = None
+    def combine(x: Option[A], y: Option[A]) = x `orElse` y
+    val empty                               = None
 
   def lastOptionMonoid[A]: Monoid[Option[A]] = dual(firstOptionMonoid)
 
@@ -47,9 +48,7 @@ object Monoid:
 
   def endoMonoid[A]: Monoid[A => A] = new:
     def combine(f: A => A, g: A => A): A => A = f andThen g
-    val empty = a => a // identity function
-
-
+    val empty                                 = a => a // identity function
 
   import fpinscala.exercises.testing.Gen
   import fpinscala.exercises.testing.Prop
@@ -67,14 +66,11 @@ object Monoid:
       .tag("identity")
     associativity && identity
 
-
-
   def combineAll[A](as: List[A], m: Monoid[A]): A =
     as.foldLeft(m.empty)(m.combine)
 
   def foldMap[A, B](as: List[A], m: Monoid[B])(f: A => B): B =
     as.foldLeft(m.empty)((b, a) => m.combine(b, f(a)))
-
 
   def foldRight[A, B](as: List[A])(acc: B)(f: (A, B) => B): B =
     foldMap(as, dual(endoMonoid))(f.curried)(acc)
@@ -83,23 +79,20 @@ object Monoid:
     foldMap(as, endoMonoid)((a: A) => (b: B) => f(b, a))(acc)
 
   def foldMapV[A, B](as: IndexedSeq[A], m: Monoid[B])(f: A => B): B =
-    if (as.length <= 1) then
-      as.headOption.map(f).getOrElse(m.empty)
+    if as.length <= 1 then as.headOption.map(f).getOrElse(m.empty)
     else
-      val (l,r) = as.splitAt(as.size / 2)
-      m.combine(foldMapV(l,m)(f), foldMapV(r,m)(f))
-
-    
+      val (l, r) = as.splitAt(as.size / 2)
+      m.combine(foldMapV(l, m)(f), foldMapV(r, m)(f))
 
   def par[A](m: Monoid[A]): Monoid[Par[A]] = new:
     def combine(a1: Par[A], a2: Par[A]) = a1.map2(a2)(m.combine)
-    val empty = Par.unit(m.empty)
-    
-    
+    val empty                           = Par.unit(m.empty)
+
   def parFoldMap[A, B](as: IndexedSeq[A], m: Monoid[B])(f: A => B): Par[B] =
-    Par.parMap(as)(f).flatMap: bs =>
-      foldMapV(bs, par(m))(b => Par.lazyUnit(b))
-    
+    Par
+      .parMap(as)(f)
+      .flatMap: bs =>
+        foldMapV(bs, par(m))(b => Par.lazyUnit(b))
 
   def ordered(ints: IndexedSeq[Int]): Boolean =
     ???
@@ -111,41 +104,45 @@ object Monoid:
   lazy val wcMonoid: Monoid[WC] = new:
     val empty = WC.Stub("")
     def combine(wc1: WC, wc2: WC) = (wc1, wc2) match
-      case (WC.Stub(a), WC.Stub(b)) => WC.Stub(a + b)
+      case (WC.Stub(a), WC.Stub(b))       => WC.Stub(a + b)
       case (WC.Stub(a), WC.Part(l, w, r)) => WC.Part(a + l, w, r)
       case (WC.Part(l, w, r), WC.Stub(a)) => WC.Part(l, w, r + a)
       case (WC.Part(l1, w1, r1), WC.Part(l2, w2, r2)) =>
         WC.Part(l1, w1 + (if (r1 + l2).isEmpty then 0 else 1) + w2, r2)
 
-      def count(s: String): Int =
-        def wc(c: Char): WC =
-          if c.isWhitespace then
-            WC.Part("", 0, "")
-          else
-            WC.Stub(c.toString)
+    def count(s: String): Int =
+      def wc(c: Char): WC =
+        if c.isWhitespace then WC.Part("", 0, "")
+        else WC.Stub(c.toString)
 
-        def unstub(s: String) = if s.isEmpty then 0 else 1
+      def unstub(s: String) = if s.isEmpty then 0 else 1
 
-        foldMapV(s.toIndexedSeq, wcMonoid)(wc) match
-          case WC.Stub(s) => unstub(s)
-          case WC.Part(l, w, r) => unstub(l) + w + unstub(r)
-      end count
-
+      foldMapV(s.toIndexedSeq, wcMonoid)(wc) match
+        case WC.Stub(s)       => unstub(s)
+        case WC.Part(l, w, r) => unstub(l) + w + unstub(r)
+    end count
 
   given productMonoid[A, B](using ma: Monoid[A], mb: Monoid[B]): Monoid[(A, B)]
   with
-    def combine(x: (A, B), y: (A, B)) = ???
-    val empty                         = ???
-
-  given functionMonoid[A, B](using mb: Monoid[B]): Monoid[A => B] with
-    def combine(f: A => B, g: A => B) = ???
-    val empty: A => B                 = a => ???
+    def combine(x: (A, B), y: (A, B)) =
+      (ma.combine(x(0), y(0)), mb.combine(x(1), y(1)))
+    val empty = (ma.empty, mb.empty)
 
   given mapMergeMonoid[K, V](using mv: Monoid[V]): Monoid[Map[K, V]] with
-    def combine(a: Map[K, V], b: Map[K, V]) = ???
-    val empty                               = ???
+    def combine(a: Map[K, V], b: Map[K, V]) =
+      (a.keySet ++ b.keySet).foldLeft(empty): (acc, k) =>
+        acc.updated(
+          k,
+          mv.combine(a.getOrElse(k, mv.empty), b.getOrElse(k, mv.empty))
+        )
+    val empty = Map()
+
+  given functionMonoid[A, B](using mb: Monoid[B]): Monoid[A => B] with
+    def combine(f: A => B, g: A => B) = a => mb.combine(f(a), g(a))
+    val empty: A => B                 = a => mb.empty
 
   def bag[A](as: IndexedSeq[A]): Map[A, Int] =
-    ???
+    import Foldable.given
+    as.foldMap(a => Map(a -> 1))
 
 end Monoid
