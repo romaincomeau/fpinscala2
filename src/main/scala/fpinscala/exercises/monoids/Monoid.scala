@@ -6,8 +6,7 @@ import fpinscala.exercises.testing.Gen.`**`
 import fpinscala.exercises.testing.Prop
 import fpinscala.exercises.testing.Prop.*
 
-trait Monoid[A]:
-  def combine(a1: A, a2: A): A
+trait Monoid[A] extends Semigroup[A]:
   def empty: A
 
 object Monoid:
