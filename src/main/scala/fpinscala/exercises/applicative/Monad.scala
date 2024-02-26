@@ -9,6 +9,12 @@ trait Monad[F[_]] extends Applicative[F]:
     def flatMap[B](f: A => F[B]): F[B] =
       fa.map(f).join
 
+    override def map[B](f: A => B): F[B] =
+      fa.flatMap(a => unit(f(a)))
+
+    override def map2[B, C](fb: F[B])(f: (A, B) => C): F[C] =
+      fa.flatMap(a => fb.map(b => f(a, b)))
+
   override def apply[A, B](ff: F[A => B])(fa: F[A]): F[B] =
     ff.flatMap(f => fa.map(f))
 
@@ -27,10 +33,3 @@ object Monad:
     extension [A](gha: G[H[A]])
       override def flatMap[B](f: A => G[H[B]]): G[H[B]] =
         ???
-
-  given eitherMonad[E]: Monad[Either[E, _]] with
-    def unit[A](a: => A): Either[E, A] = Right(a)
-    extension [E, A](ma: Either[E, A])
-      def flatMap[B](f: A => Either[E, B]): Either[E, B] = ma match
-        case Right(a) => f(a)
-        case Left(e)  => Left(e)

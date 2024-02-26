@@ -1,2 +1,0 @@
-Hard: What is the meaning of sequence for a ZipList? Specializing the signature of sequence to ZipList, we have this:
-def sequence[A](as: List[ZipList[A]]): ZipList[List[A]]
