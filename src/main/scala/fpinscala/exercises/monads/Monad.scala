@@ -43,8 +43,6 @@ trait Monad[F[_]] extends Functor[F]:
     def **[B](fb: F[B]): F[(A, B)] =
       fa.product(fb)
 
-
-
   def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] =
     as.foldRight(unit(List.empty[B]))((h, t) => f(h).map2(t)(_ :: _))
 
@@ -56,25 +54,22 @@ trait Monad[F[_]] extends Functor[F]:
 
   def filterM[A](as: List[A])(f: A => F[Boolean]): F[List[A]] =
     as.foldRight(unit(List[A]()))((h, t) =>
-      f(h).flatMap(b => if b then unit(h).map2(t)(_ :: _) else t))
+      f(h).flatMap(b => if b then unit(h).map2(t)(_ :: _) else t)
+    )
 
   extension [A](fa: F[A])
     def flatMapViaCompose[B](f: A => F[B]): F[B] =
       compose(_ => fa, f)(())
 
-    
-    
-
   extension [A](ffa: F[F[A]])
     def join: F[A] =
       ffa.flatMap(identity)
-
 
   extension [A](fa: F[A])
     def flatMapViaJoinAndMap[B](f: A => F[B]): F[B] =
       fa.map(f).join
 
-  def compose[A,B,C](fa: A => F[B], fb: B => F[C]): A => F[C] =
+  def compose[A, B, C](fa: A => F[B], fb: B => F[C]): A => F[C] =
     a => fa(a).flatMap(fb)
 
   def composeViaJoinAndMap[A, B, C](f: A => F[B], g: B => F[C]): A => F[C] =
@@ -85,7 +80,7 @@ end Monad
 object Monad:
   given stateMonad[S]: Monad[State[S, _]] with
     def unit[A](a: => A) = State.unit(a)
-    extension [A](fa: State[S,A])
+    extension [A](fa: State[S, A])
       override def flatMap[B](f: A => State[S, B]): State[S, B] =
         State.flatMap(fa)(f)
 
@@ -139,7 +134,6 @@ object Id:
     extension [A](fa: Id[A])
       override def flatMap[B](f: A => Id[B]) =
         fa.flatMap(f)
-        
 
 opaque type Reader[-R, +A] = R => A
 
@@ -154,7 +148,7 @@ object Reader:
   extension [R, A](ra: Reader[R, A]) def run(r: R): A = ra(r)
 
   given readerMonad[R]: Monad[Reader[R, _]] with
-  // We ignore the provided reader and simply return _a_
+    // We ignore the provided reader and simply return _a_
     def unit[A](a: => A): Reader[R, A] = _ => a
 
     extension [A](fa: Reader[R, A])
@@ -164,6 +158,5 @@ object Reader:
       // to the (reader: R parameter).
       override def flatMap[B](f: A => Reader[R, B]) =
         r => f(fa(r))(r)
-        
-end Reader
 
+end Reader

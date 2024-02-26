@@ -15,13 +15,10 @@ trait Applicative[F[_]] extends Functor[F]:
 
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
     fa.map2(fab)((a, f) => f(a))
-    // the book wrote:
-    // fab.map2(fa)(_(_))
 
   extension [A](fa: F[A])
     def map2[B, C](fb: F[B])(f: (A, B) => C): F[C] =
-      apply(unit(f.curried))(???)
-      
+      apply(apply(unit(f.curried))(fa))(fb)
 
     def map[B](f: A => B): F[B] =
       apply(unit(f))(fa)
@@ -43,14 +40,14 @@ trait Applicative[F[_]] extends Functor[F]:
         fb: F[B],
         fc: F[C]
     )(f: (A, B, C) => D): F[D] =
-      ???
+      apply(apply(apply(unit(f.curried))(fa))(fb))(fc)
 
     def map4[B, C, D, E](
         fb: F[B],
         fc: F[C],
         fd: F[D]
     )(f: (A, B, C, D) => E): F[E] =
-      ???
+      apply(apply(apply(apply(unit(f.curried))(fa))(fb))(fc))(fd)
 
   def product[G[_]](G: Applicative[G]): Applicative[[x] =>> (F[x], G[x])] =
     ???
@@ -81,10 +78,17 @@ object Applicative:
 
   object Validated:
     given validatedApplicative[E: Monoid]: Applicative[Validated[E, _]] with
-      def unit[A](a: => A) = ???
+      val monoidInstance   = summon[Monoid[E]]
+      def unit[A](a: => A) = Valid(a)
       extension [A](fa: Validated[E, A])
         override def map2[B, C](fb: Validated[E, B])(f: (A, B) => C) =
-          ???
+          (fa, fb) match
+            case (Invalid(e1), Invalid(e2)) =>
+              Invalid(monoidInstance.combine(e1, e2))
+            case (e @ Invalid(_), _)      => e
+            case (_, e @ Invalid(_))      => e
+            case (Valid(x), Valid(y)) => Valid(f(x, y))
+        end map2
 
   type Const[A, B] = A
 

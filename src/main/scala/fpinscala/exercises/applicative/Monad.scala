@@ -27,3 +27,10 @@ object Monad:
     extension [A](gha: G[H[A]])
       override def flatMap[B](f: A => G[H[B]]): G[H[B]] =
         ???
+
+  given eitherMonad[E]: Monad[Either[E, _]] with
+    def unit[A](a: => A): Either[E, A] = Right(a)
+    extension [E, A](ma: Either[E, A])
+      def flatMap[B](f: A => Either[E, B]): Either[E, B] = ma match
+        case Right(a) => f(a)
+        case Left(e)  => Left(e)
