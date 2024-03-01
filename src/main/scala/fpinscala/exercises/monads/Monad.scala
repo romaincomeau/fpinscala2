@@ -135,8 +135,6 @@ object Id:
       override def flatMap[B](f: A => Id[B]) =
         fa.flatMap(f)
 
-
-
 // READER
 // 1. What are its primitive operations? FlatMap, Pure
 // 2. Sequence would allow to describe a sequence of operations that would be chained

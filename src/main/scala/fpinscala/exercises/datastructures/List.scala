@@ -1,5 +1,6 @@
 package fpinscala.exercises.datastructures
 
+import scala.annotation.nowarn
 import scala.annotation.tailrec
 
 object Debug extends App:
@@ -9,13 +10,17 @@ enum List[+A]:
   case Nil
   case Cons(head: A, tail: List[A])
 
-object List: /* `List` companion object. Contains functions for creating and
-   * working with lists. */
-  def sum(ints: List[Int]): Int = ints match /* A function that uses pattern
-     * matching to add up a list of integers */
-    case Nil         => 0 // The sum of the empty list is 0.
-    case Cons(x, xs) => x + sum(xs) /* The sum of a list starting with `x` is
-       * `x` plus the sum of the rest of the list. */
+object List:
+  // object `::`:
+  //   def unapply[A](l: List[A]): Option[(A, List[A])] =
+  //     l match
+  //       case Cons(h, t) => Some((h, t))
+  //       case Nil        => None
+  // import `::`.*
+  def sum(ints: List[Int]): Int = ints match
+    // case x :: xs => x + sum(xs)
+    case Cons(h, t) => h + sum(t)
+    case Nil        => 0
 
   def product(doubles: List[Double]): Double = doubles match
     case Nil          => 1.0

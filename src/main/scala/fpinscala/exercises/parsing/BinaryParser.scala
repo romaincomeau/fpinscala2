@@ -2,9 +2,11 @@ package fpinscala.exercises.parsing
 
 import scala.annotation.targetName
 
+import fpinscala.exercises.monads.Monad
+
 enum Result[+A]:
   case Success(get: A, length: Int)
-  case Failure(msg: String, isCommitted: Boolean)
+  case Failure(msg: String, isCommited: Boolean)
 
   def advanceSuccess(n: Int): Result[A] = this match
     case Success(a, m) => Success(a, n + m)
@@ -27,6 +29,18 @@ object BinaryParser:
   private val InsufficientLength = "Expected more bytes than input"
   private val IntByteCount       = 4
   private val ShortByteCount     = 2
+
+  given binaryParserMonad: Monad[BinaryParser] with
+    def unit[A](a: => A): BinaryParser[A] = _ => Success(a, 0)
+    extension [A](pa: BinaryParser[A])
+      override def flatMap[B](f: A => BinaryParser[B]): BinaryParser[B] =
+        s =>
+          pa(s) match
+            case Success(a, n) =>
+              f(a)(s.advanceBy(n))
+                .advanceSuccess(n)
+            case Failure(s, b) => Failure(s, b)
+  end binaryParserMonad
 
   extension [A](pa: BinaryParser[A])
     def run(input: IndexedSeq[Byte]): Result[A] =
@@ -88,6 +102,12 @@ object BinaryParser:
     def some: BinaryParser[Option[A]] =
       map(Some(_))
 
+    def withFilter(f: A => Boolean): BinaryParser[A] = s =>
+      pa(s) match
+        case Success(a, n) if f(a) => Success(a, n)
+        case Success(a, _)         => Failure(s"predicate fail $a", true)
+        case f @ Failure(_, _)     => f
+
   end extension
 
   extension [A, B, C](p: BinaryParser[((A, B), C)])
@@ -110,10 +130,12 @@ object BinaryParser:
     else Failure(InsufficientLength, true)
 
   @main def p(): Unit =
-    val pl = byte ** byte ** byte
-    val pr = byte ** (byte ** byte)
-
-    val input = IndexedSeq(1, 2, 3).map(_.toByte)
-    println(pl.run(input))
-    println(pr.run(input))
+    val input = IndexedSeq(0x7d, 0x7e, 3).map(_.toByte)
+    val x: BinaryParser[(Byte, Byte, Byte)] = for
+      b1 <- byte
+      b2 <- byte
+      b3 <- byte
+      if b1 == 0x7d.toByte
+      if b2 == 0x7e.toByte
+    yield (b1, b2, b3)
 end BinaryParser
