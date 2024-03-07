@@ -1,6 +1,7 @@
 package fpinscala.exercises
 package monads
 
+import fpinscala.answers.monoids.Monoid
 import parallelism.*
 import parallelism.Par.*
 import parsing.*
@@ -135,11 +136,6 @@ object Id:
       override def flatMap[B](f: A => Id[B]) =
         fa.flatMap(f)
 
-// READER
-// 1. What are its primitive operations? FlatMap, Pure
-// 2. Sequence would allow to describe a sequence of operations that would be chained
-// allowing us to go from a List[Reader[R, A]] to a Reader[R, List[A]].
-// 3. replicateM would repeat a Reader `n` times passing in the reader automatically.
 opaque type Reader[-R, +A] = R => A
 object Reader:
   def ask[R]: Reader[R, R] = r => r

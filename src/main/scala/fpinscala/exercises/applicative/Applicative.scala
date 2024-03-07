@@ -10,49 +10,58 @@ trait Applicative[F[_]] extends Functor[F]:
   def unit[A](a: => A): F[A]
 
   def apply[A, B](fab: F[A => B])(fa: F[A]): F[B] =
-    ???
+    fa.map2(fab)((a, f) => f(a))
 
   extension [A](fa: F[A])
     def map2[B, C](fb: F[B])(f: (A, B) => C): F[C] =
-      ???
+      apply(apply(unit(f.curried))(fa))(fb)
 
     def map[B](f: A => B): F[B] =
       apply(unit(f))(fa)
 
-  def sequence[A](fas: List[F[A]]): F[List[A]] =
-    ???
-
   def traverse[A, B](as: List[A])(f: A => F[B]): F[List[B]] =
-    ???
+    as.foldRight(unit[List[B]](Nil))((h, t) => f(h).map2(t)(_ :: _))
+
+  def sequence[A](fas: List[F[A]]): F[List[A]] =
+    traverse(fas)(identity)
 
   def replicateM[A](n: Int, fa: F[A]): F[List[A]] =
-    ???
+    sequence(List.fill(n)(fa))
 
   extension [A](fa: F[A])
     def product[B](fb: F[B]): F[(A, B)] =
-      ???
+      fa.map2(fb)((_, _))
 
     def map3[B, C, D](
         fb: F[B],
         fc: F[C]
     )(f: (A, B, C) => D): F[D] =
-      ???
+      apply(apply(apply(unit(f.curried))(fa))(fb))(fc)
 
     def map4[B, C, D, E](
         fb: F[B],
         fc: F[C],
         fd: F[D]
     )(f: (A, B, C, D) => E): F[E] =
-      ???
+      apply(apply(apply(apply(unit(f.curried))(fa))(fb))(fc))(fd)
 
-  def product[G[_]](G: Applicative[G]): Applicative[[x] =>> (F[x], G[x])] =
-    ???
+  def product[G[_]](G: Applicative[G]): Applicative[[x] =>> (F[x], G[x])] = new:
+    def unit[A](a: => A) = (self.unit(a), G.unit(a))
+    override def apply[A, B](fs: (F[A => B], G[A => B]))(p: (F[A], G[A])) =
+      (self.apply(fs(0))(p(0)), G.apply(fs(1))(p(1)))
 
-  def compose[G[_]](G: Applicative[G]): Applicative[[x] =>> F[G[x]]] =
-    ???
+  def compose[G[_]](G: Applicative[G]): Applicative[[x] =>> F[G[x]]] = new:
+    def unit[A](a: => A) = self.unit(G.unit(a))
+
+    override def apply[A, B](z: F[G[A => B]])(fga: F[G[A]]) = ???
+
+    extension [A](fga: F[G[A]])
+      override def map2[B, C](fgb: F[G[B]])(f: (A, B) => C): F[G[C]] =
+        self.map2(fga)(fgb)(G.map2(_)(_)(f))
 
   def sequenceMap[K, V](ofa: Map[K, F[V]]): F[Map[K, V]] =
-    ???
+    ofa.foldRight(self.unit[Map[K, V]](Map.empty)): (fa, map) =>
+      fa._2.map2(map)((v, m) => m.updated(fa._1, v))
 
 object Applicative:
   opaque type ZipList[+A] = LazyList[A]
@@ -74,10 +83,15 @@ object Applicative:
 
   object Validated:
     given validatedApplicative[E: Monoid]: Applicative[Validated[E, _]] with
-      def unit[A](a: => A) = ???
+      val m                = summon[Monoid[E]]
+      def unit[A](a: => A) = Valid(a)
       extension [A](fa: Validated[E, A])
         override def map2[B, C](fb: Validated[E, B])(f: (A, B) => C) =
-          ???
+          (fa, fb) match
+            case (Invalid(e0), Invalid(e1)) => Invalid(m.combine(e0, e1))
+            case (e @ Invalid(_), _)        => e
+            case (_, e @ Invalid(_))        => e
+            case (Valid(a), Valid(b))       => Valid(f(a, b))
 
   type Const[A, B] = A
 
@@ -91,9 +105,11 @@ object Applicative:
       override def flatMap[B](f: A => Option[B]) = oa.flatMap(f)
 
   given eitherMonad[E]: Monad[Either[E, _]] with
-    def unit[A](a: => A): Either[E, A] = ???
+    def unit[A](a: => A): Either[E, A] = Right(a)
     extension [A](eea: Either[E, A])
-      override def flatMap[B](f: A => Either[E, B]) = ???
+      override def flatMap[B](f: A => Either[E, B]) = eea match
+        case Left(e)  => Left(e)
+        case Right(a) => f(a)
 
   given stateMonad[S]: Monad[State[S, _]] with
     def unit[A](a: => A): State[S, A] = State(s => (a, s))

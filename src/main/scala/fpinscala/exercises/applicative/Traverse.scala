@@ -17,9 +17,17 @@ trait Traverse[F[_]] extends Functor[F], Foldable[F]:
     def sequence: G[F[A]] =
       fga.traverse(ga => ga)
 
+  type Id[A] = A
+
+  object Id:
+    given idMonad: Monad[Id] with
+      def unit[A](a: => A) = a
+
+      extension [A](a: A) override def flatMap[B](f: A => B): B = f(a)
+
   extension [A](fa: F[A])
     def map[B](f: A => B): F[B] =
-      ???
+      fa.traverse[Id, B](f)(using Id.idMonad)
 
     override def foldMap[B](f: A => B)(using mb: Monoid[B]): B =
       fa.traverse[Const[B, _], Nothing](f)
@@ -62,19 +70,25 @@ object Traverse:
   given listTraverse: Traverse[List] with
     extension [A](as: List[A])
       override def traverse[G[_]: Applicative, B](f: A => G[B]): G[List[B]] =
-        ???
+        val g = summon[Applicative[G]]
+        as.foldRight(g.unit[List[B]](Nil))((a, acc) => f(a).map2(acc)(_ :: _))
 
   given optionTraverse: Traverse[Option] with
     extension [A](oa: Option[A])
       override def traverse[G[_]: Applicative, B](f: A => G[B]): G[Option[B]] =
-        ???
+        oa match
+          case Some(a) => f(a).map(Some(_))
+          case None    => summon[Applicative[G]].unit(None)
 
   given treeTraverse: Traverse[Tree] = new:
     extension [A](ta: Tree[A])
       override def traverse[G[_]: Applicative, B](f: A => G[B]): G[Tree[B]] =
-        ???
+        f(ta.head).map2(ta.tail.traverse(a => a.traverse(f)))(Tree(_, _))
 
   given mapTraverse[K]: Traverse[Map[K, _]] with
     extension [A](m: Map[K, A])
       override def traverse[G[_]: Applicative, B](f: A => G[B]): G[Map[K, B]] =
-        ???
+        val ap = summon[Applicative[G]]
+        m.foldRight(ap.unit(Map.empty[K, B])): (kv, acc) =>
+          acc.map2(f(kv(1))): (actualMap, b) =>
+            actualMap + (kv(0) -> b)
