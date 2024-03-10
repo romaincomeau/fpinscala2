@@ -11,13 +11,13 @@ object IO0:
     self =>
     def unsafeRun: Unit
     def ++(io: IO): IO = new:
-      def unsafeRun =
+      def unsafeRun: Unit =
         self.unsafeRun
         io.unsafeRun
 
   object IO:
     def empty: IO = new:
-      def unsafeRun = ()
+      def unsafeRun: Unit = ()
 
       /* The API of this `IO` type isn't very useful. Not many operations (it is
        * only a monoid), and not many laws to help with reasoning. It is
@@ -394,11 +394,18 @@ object IO3:
 
     // Exercise 1: Implement a free monad for any type constructor F
     given freeMonad[F[_]]: Monad[[x] =>> Free[F, x]] with
-      def unit[A](a: => A)                                             = ???
-      extension [A](fa: Free[F, A]) def flatMap[B](f: A => Free[F, B]) = ???
+      def unit[A](a: => A) = Return(a)
+      extension [A](fa: Free[F, A])
+        def flatMap[B](f: A => Free[F, B]) =
+          fa.flatMap(f)
 
     // Exercise 2: Implement runTrampoline
-    extension [A](fa: Free[Function0, A]) def runTrampoline: A = ???
+    extension [A](fa: Free[Function0, A])
+      def runTrampoline: A = fa match
+        case Return(a)   => a
+        case Suspend(fa) => fa()
+        case FlatMap(y, g) => // y.flatMap(g).
+          ???
 
   /* The type constructor `F` lets us control the set of external requests our
    * program is allowed to make. For instance, here is a type that allows for
